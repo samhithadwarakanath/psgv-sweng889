@@ -4,7 +4,7 @@ Goal: receive the factory request, identify the decision criteria,
 coordinate the workflow, and present the final answer to the user.
 It is the only agent that talks to the user.
 """
-
+import re
 from agents.supplier_analysis_agent import analyze
 from common import ask, banner
 from tools.supplier_tool import find_supplier
@@ -37,31 +37,65 @@ def extract_criteria(llm, request: str) -> str:
     return criteria
 
 
+def _extract_quantity_and_deadline(request: str) -> tuple[int | None, int | None]:
+    """Pulls the requested quantity (units) and deadline (days) out of the
+    factory request text using simple pattern matching.
+ 
+    This is intentionally independent of TODO 1's prompt, so the risk check
+    still works even before the Buyer Agent's criteria prompt is improved.
+    """
+    quantity = None
+    deadline = None
+ 
+    qty_match = re.search(r"(\d+)\s*units", request, re.IGNORECASE)
+    if qty_match:
+        quantity = int(qty_match.group(1))
+ 
+    deadline_match = re.search(r"(\d+)\s*days?", request, re.IGNORECASE)
+    if deadline_match:
+        deadline = int(deadline_match.group(1))
+ 
+    return quantity, deadline
+ 
+ 
 def check_risks(recommendation: str, request: str, criteria: str) -> list[str]:
     """Flags a recommendation that cannot actually be met.
-
-    -----------------------------------------------------------------------
-    TODO 3  —  Implement at least one rule.
-
-    Right now this returns nothing, so an impossible recommendation reaches
-    the user unchallenged.
-
-    `find_supplier(recommendation)` gives you the structured record for the
-    supplier the agent named, or None if it named one that does not exist.
-    Each record has: name, price_per_unit, delivery_days,
-    reliability_score, capacity_units.
-
-    Rules worth adding:
-      * the supplier does not exist in the catalogue at all
-      * capacity_units is below the quantity the factory asked for
-      * delivery_days is above the deadline the factory gave
-      * reliability_score is below some threshold you choose
-
-    You will need the quantity and the deadline as numbers. Getting them
-    out of the request is part of the exercise -- TODO 1 is one way.
-    -----------------------------------------------------------------------
+ 
+    Checks the named supplier's structured record against the factory's
+    quantity and deadline, and against a minimum reliability threshold.
     """
     warnings: list[str] = []
+ 
+    supplier = find_supplier(recommendation)
+    if supplier is None:
+        warnings.append(
+            "The recommended supplier could not be matched to any supplier "
+            "in the catalogue. The recommendation may be invented."
+        )
+        return warnings
+ 
+    quantity, deadline = _extract_quantity_and_deadline(request)
+ 
+    if quantity is not None and supplier["capacity_units"] < quantity:
+        warnings.append(
+            f"{supplier['name']}'s capacity ({supplier['capacity_units']} units) "
+            f"is below the requested quantity ({quantity} units)."
+        )
+ 
+    if deadline is not None and supplier["delivery_days"] > deadline:
+        warnings.append(
+            f"{supplier['name']}'s delivery time ({supplier['delivery_days']} days) "
+            f"exceeds the requested deadline ({deadline} days)."
+        )
+ 
+    RELIABILITY_THRESHOLD = 0.75
+    if supplier["reliability_score"] < RELIABILITY_THRESHOLD:
+        warnings.append(
+            f"{supplier['name']}'s reliability score "
+            f"({supplier['reliability_score']:.2f}) is below the "
+            f"{RELIABILITY_THRESHOLD} threshold considered acceptable."
+        )
+ 
     return warnings
 
 

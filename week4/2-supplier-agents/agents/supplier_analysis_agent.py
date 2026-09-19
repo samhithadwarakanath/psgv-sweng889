@@ -31,7 +31,22 @@ Criteria identified by the Buyer Agent:
 Supplier information:
 {suppliers}
 
-Recommend one supplier.
+Compare the suppliers using these four attributes: price per unit,
+delivery time in days, reliability score, and capacity in units.
+
+Quantity and deadline are hard constraints, not preferences:
+- Reject any supplier whose capacity is less than the quantity requested.
+- Reject any supplier whose delivery time is greater than the deadline.
+
+Among the suppliers that satisfy both hard constraints, recommend the one
+with the best balance of price and reliability, and briefly explain the
+trade-offs against the next-best option.
+
+If no supplier satisfies both the quantity and the deadline, say so
+explicitly instead of recommending one anyway.
+
+Name the exact supplier name as it appears in the supplier information
+above. Do not recommend a supplier that is not listed above.
 """
 
 

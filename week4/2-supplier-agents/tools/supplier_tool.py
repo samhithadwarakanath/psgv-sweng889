@@ -41,13 +41,26 @@ def supplier_information() -> str:
 
 
 def find_supplier(text: str) -> dict | None:
-    """Returns the supplier record whose name appears in `text`, or None.
-
-    Useful for the risk check in agents/buyer_agent.py: pass the agent's
-    recommendation and get back the structured record it refers to.
+    """Returns the supplier record for the supplier actually being
+    recommended, or None if no known supplier name appears in `text`.
+ 
+    The Supplier Analysis Agent's response often discusses multiple
+    suppliers by name before concluding with one recommendation. Taking
+    the *first* name mentioned anywhere in the text risks matching a
+    supplier that was only discussed and rejected, not the one actually
+    recommended. Taking the *last* occurrence is a simple, more reliable
+    heuristic, since the final recommendation is almost always stated at
+    or near the end of the response (e.g. in a "Conclusion" section).
     """
     lowered = text.lower()
+    best_match = None
+    best_position = -1
+ 
     for supplier in load_catalogue()["suppliers"]:
-        if supplier["name"].lower() in lowered:
-            return supplier
-    return None
+        name_lower = supplier["name"].lower()
+        position = lowered.rfind(name_lower)
+        if position > best_position:
+            best_position = position
+            best_match = supplier
+ 
+    return best_match
